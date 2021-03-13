@@ -4,24 +4,48 @@ FROM ${BASEIMAGE}
 CMD ["/bin/bash"]
 
 # Base packages
-RUN dnf update -y \
+RUN dnf update -y --exclude=libcublas-devel \
  && dnf install -y kernel-devel-$(uname -r) kernel-headers-$(uname -r) \
+ libXau libXau.i686 \
+ libXdmcp libXdmcp.i686 \
+ libxcb libxcb.i686 \
+ libXext libXext.i686 \
+ libX11 libX11.i686 \
+ elfutils-libelf-devel gcc make acpid libglvnd-glx libglvnd-opengl libglvnd-devel pkgconfig kmod \
  && dnf clean all \
  && rm -rf /var/cache/yum
 
-# Install CUDA
+# nvidia-container-runtime
+ENV NVIDIA_VISIBLE_DEVICES \
+ ${NVIDIA_VISIBLE_DEVICES:-all}
+ENV NVIDIA_DRIVER_CAPABILITIES \
+ ${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}graphics
+
+# nvidia-docker v1
+RUN echo "/usr/local/nvidia/lib" >> /etc/ld.so.conf.d/nvidia.conf && \
+    echo "/usr/local/nvidia/lib64" >> /etc/ld.so.conf.d/nvidia.conf
+
+# Required for non-glvnd setups.
+#ENV LD_LIBRARY_PATH /usr/local/nvidia/lib:/usr/local/nvidia/lib64
+
+# Required for non-glvnd setups.
+#RUN echo '/usr/$LIB/libGL.so.1' > /etc/ld.so.preload && \
+#    echo '/usr/$LIB/libEGL.so.1' >> /etc/ld.so.preload
+
+# Add Repos
 RUN curl -ksL https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo -o /etc/yum.repos.d/cuda.repo \
  && rpm -i https://developer.download.nvidia.com/compute/machine-learning/repos/rhel8/x86_64/nvidia-machine-learning-repo-rhel8-1.0.0-1.x86_64.rpm \
- && dnf update -y \
+ && dnf update -y --exclude=libcublas-devel \
  && dnf clean all \
  && rm -rf /var/cache/yum
+
+ENV CUDA_VERSION=11.1.1
 
 # Install nVidia drivers
 RUN curl -ksL https://us.download.nvidia.com/XFree86/Linux-x86_64/460.56/NVIDIA-Linux-x86_64-460.56.run -o /opt/nvidia-drivers.run \
  && chmod +x /opt/nvidia-drivers.run \
- && /opt/nvidia-drivers.run \
- && rm /opt/nvidia-drivers.run
-
+ && /opt/nvidia-drivers.run -s
+# && rm /opt/nvidia-drivers.run
 
 # Since UE4 refuses to run as the root user under Linux, create a non-root user
 RUN useradd --create-home --home /home/ue4 --shell /bin/bash --uid 1000 ue4 && \
